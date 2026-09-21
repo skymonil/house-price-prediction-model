@@ -73,13 +73,12 @@ wandb/
 # Data
 # ============================================================
 
-# Ignore generated/local datasets
-data/*.csv
+# Ignore large/generated datasets
 data/*.xlsx
 data/*.parquet
 
-# Keep the data directory
-!data/.gitkeep
+# Keep the project dataset
+!data/houses.csv
 
 
 # ============================================================
