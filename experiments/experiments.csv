@@ -1,0 +1,4 @@
+experiment_id,model,algorithm,n_estimators,random_state,mae,r2,model_path
+1,V1,LinearRegression,,,904238.53,0.9470,models/model.pkl
+2,V2,RandomForest,100,42,609850.00,0.9754,models/model_v2.pkl
+3,v3,RandomForest,200,42,587950,0.9762,models/model_v3.pkl

@@ -1,63 +1,33 @@
-import joblib
+import mlflow
 import pandas as pd
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+
+# -------------------------
+# Load registered model
+# -------------------------
+
+model_uri = "models:/HousePricePredictor/1"
+
+model = mlflow.sklearn.load_model(model_uri)
 
 
-# --------------------------------------------------
-# 1. Create FastAPI application
-# --------------------------------------------------
+# -------------------------
+# New house
+# -------------------------
 
-app = FastAPI(title="House Price Prediction API")
-
-
-# --------------------------------------------------
-# 2. Load model + preprocessor
-# --------------------------------------------------
-
-artifact = joblib.load("models/model.pkl")
-
-model = artifact["model"]
-preprocessor = artifact["preprocessor"]
+new_house = pd.DataFrame({
+    "Bedrooms": [3],
+    "Area": [1200],
+    "Location": ["Mumbai"],
+    "Age": [5]
+})
 
 
-# --------------------------------------------------
-# 3. Define prediction request
-# --------------------------------------------------
+# -------------------------
+# Prediction
+# -------------------------
 
-class HouseInput(BaseModel):
-    bedrooms: int
-    area: float
-    location: str
-    age: int
+predicted_price = model.predict(new_house)
 
 
-# --------------------------------------------------
-# 4. Prediction endpoint
-# --------------------------------------------------
-
-@app.post("/predict")
-def predict_price(house: HouseInput):
-
-    # Convert request into DataFrame
-    new_house = pd.DataFrame({
-        "Bedrooms": [house.bedrooms],
-        "Area": [house.area],
-        "Location": [house.location],
-        "Age": [house.age]
-    })
-
-    # Apply the same preprocessing used during training
-    new_house_processed = preprocessor.transform(new_house)
-
-    # Make prediction
-    predicted_price = model.predict(new_house_processed)
-
-    return {
-        "predicted_price": predicted_price[0]
-    }
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+print(f"Predicted Price: ₹{predicted_price[0]:,.2f}")

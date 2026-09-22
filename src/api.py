@@ -1,4 +1,5 @@
-import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 
 from fastapi import FastAPI
@@ -13,13 +14,14 @@ app = FastAPI(title="House Price Prediction API")
 
 
 # --------------------------------------------------
-# 2. Load model + preprocessor
+# 2. Load registered MLflow model
 # --------------------------------------------------
 
-artifact = joblib.load("models/model.pkl")
+mlflow.set_tracking_uri("http://localhost:5000")
 
-model = artifact["model"]
-preprocessor = artifact["preprocessor"]
+model = mlflow.sklearn.load_model(
+    "models:/HousePricePredictor/1"
+)
 
 
 # --------------------------------------------------
@@ -48,15 +50,18 @@ def predict_price(house: HouseInput):
         "Age": [house.age]
     })
 
-    # Apply the same preprocessing used during training
-    new_house_processed = preprocessor.transform(new_house)
-
-    # Make prediction
-    predicted_price = model.predict(new_house_processed)
+    # Pipeline handles:
+    # Data → Preprocessor → Random Forest → Prediction
+    predicted_price = model.predict(new_house)
 
     return {
         "predicted_price": predicted_price[0]
     }
+
+
+# --------------------------------------------------
+# 5. Health endpoint
+# --------------------------------------------------
 
 @app.get("/health")
 def health():
