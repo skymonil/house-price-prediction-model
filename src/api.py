@@ -1,7 +1,7 @@
 import mlflow
 import mlflow.sklearn
 import pandas as pd
-
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -17,7 +17,12 @@ app = FastAPI(title="House Price Prediction API")
 # 2. Load registered MLflow model
 # --------------------------------------------------
 
-mlflow.set_tracking_uri("http://localhost:5000")
+MLFLOW_TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    "http://localhost:5000"
+)
+
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 model = mlflow.sklearn.load_model(
     "models:/HousePricePredictor/1"
