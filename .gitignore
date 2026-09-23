@@ -121,3 +121,7 @@ Desktop.ini
 *.temp
 *.bak
 ```
+# MLflow local database
+mlflow.db
+mlflow-*.db
+artifacts/
