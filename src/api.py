@@ -25,7 +25,7 @@ MLFLOW_TRACKING_URI = os.getenv(
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 model = mlflow.sklearn.load_model(
-    "models:/HousePricePredictor/1"
+    "models:/HousePricePredictor/6"
 )
 
 

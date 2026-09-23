@@ -2,7 +2,7 @@ import joblib
 import mlflow
 import mlflow.sklearn
 import pandas as pd
-
+import os
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
@@ -10,7 +10,9 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 
-
+mlflow.set_tracking_uri(
+    os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+)
 # -------------------------
 # Load dataset
 # -------------------------
@@ -88,8 +90,7 @@ pipeline = Pipeline(
 # MLflow experiment
 # -------------------------
 
-mlflow.set_experiment("house-price-prediction")
-
+mlflow.set_experiment("house-price-prediction-v2")
 
 with mlflow.start_run(run_name="RandomForest-V3"):
 
