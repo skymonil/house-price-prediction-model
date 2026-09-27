@@ -1,3 +1,9 @@
+import json
+from pathlib import Path
+
+import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
@@ -5,25 +11,23 @@ from sklearn.pipeline import Pipeline
 
 from src.preprocess import create_preprocessor
 from src.evaluate import evaluate_model
+import os
 
-from pathlib import Path
-import json
-import joblib
-# Quality thresholds
 MIN_R2 = 0.90
 MAX_MAE = 1_000_000
 
 MODEL_PATH = Path("models/model_ci.pkl")
 METRICS_PATH = Path("models/metrics.json")
 
+MLFLOW_EXPERIMENT = "house-price-prediction-v2"
+
+
 def train_model():
-    # Load dataset
     data = pd.read_csv("data/houses.csv")
 
     X = data[["Bedrooms", "Area", "Location", "Age"]]
     y = data["Price"]
 
-    # Same split used by the training pipeline
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -31,7 +35,6 @@ def train_model():
         random_state=42,
     )
 
-    # Create preprocessing + model pipeline
     model = Pipeline(
         steps=[
             ("preprocessor", create_preprocessor()),
@@ -45,10 +48,8 @@ def train_model():
         ]
     )
 
-    # Train
     model.fit(X_train, y_train)
 
-    # Evaluate
     metrics = evaluate_model(model, X_test, y_test)
 
     return model, metrics
@@ -80,25 +81,61 @@ def validate_model(metrics):
 
     print("\nModel quality check PASSED.")
 
+
 def save_artifacts(model, metrics):
-    # Create model directory
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Save trained model
+
     joblib.dump(model, MODEL_PATH)
 
-    # Save evaluation metrics
     with open(METRICS_PATH, "w") as file:
         json.dump(metrics, file, indent=4)
 
     print("\nModel artifacts saved:")
-    print(f" Model: {MODEL_PATH}")
-    print(f" Metrics: {METRICS_PATH}")
+    print(f"  Model:   {MODEL_PATH}")
+    print(f"  Metrics: {METRICS_PATH}")
+
+
+def log_to_mlflow(model, metrics):
+    mlflow.set_tracking_uri(
+    os.environ.get("MLFLOW_TRACKING_URI", "https://mlflow.615915.xyz")
+)
+
+    mlflow.set_experiment(MLFLOW_EXPERIMENT)
+
+    with mlflow.start_run():
+        mlflow.log_params(
+            {
+                "n_estimators": 200,
+                "random_state": 42,
+                "test_size": 0.2,
+            }
+        )
+
+        mlflow.log_metrics(
+            {
+                "mae": metrics["mae"],
+                "r2": metrics["r2"],
+            }
+        )
+
+        mlflow.sklearn.log_model(
+            model,
+            name="house-price-model",
+            skops_trusted_types=[
+           "sklearn.tree._tree.Tree"
+         ]   ,
+        )
+
+        print("\nMLflow run logged successfully.")
 
 
 if __name__ == "__main__":
     model, metrics = train_model()
+
+    # Model must pass quality gate first
     validate_model(metrics)
 
-    # We will save the model only if the quality gates pass
+    # Only save/log a model that passed
     save_artifacts(model, metrics)
+
+    log_to_mlflow(model, metrics)
