@@ -1,105 +1,141 @@
+import os
 import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
 
+from src.preprocess import create_preprocessor
+from src.evaluate import evaluate_model
 
-# --------------------------------------------------
-# 1. Load dataset
-# --------------------------------------------------
-
-df = pd.read_csv("data/houses.csv")
-
-print(f"Dataset loaded: {len(df)} rows")
-
-
-# --------------------------------------------------
-# 2. Define features and target
-# --------------------------------------------------
-
-X = df[["Bedrooms", "Area", "Location", "Age"]]
-y = df["Price"]
-
-
-# --------------------------------------------------
-# 3. Train/test split
-# --------------------------------------------------
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42
+MLFLOW_TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    "http://localhost:5000",
 )
 
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-# --------------------------------------------------
-# 4. Preprocessing
-# --------------------------------------------------
 
-categorical_features = ["Location"]
-numeric_features = ["Bedrooms", "Area", "Age"]
+DATA_PATH = "data/houses.csv"
+MODEL_PATH = "models/model.pkl"
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        (
-            "location",
-            OneHotEncoder(handle_unknown="ignore"),
-            categorical_features
+EXPERIMENT_NAME = "house-price-prediction-v2"
+MODEL_NAME = "HousePricePredictor"
+
+
+def load_data():
+    df = pd.read_csv(DATA_PATH)
+
+    print(f"Dataset loaded: {len(df)} rows")
+
+    X = df[["Bedrooms", "Area", "Location", "Age"]]
+    y = df["Price"]
+
+    return X, y
+
+
+def create_model():
+    preprocessor = create_preprocessor()
+
+    model = RandomForestRegressor(
+        n_estimators=200,
+        random_state=42,
+    )
+
+    pipeline = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("model", model),
+        ]
+    )
+
+    return pipeline
+
+
+def train():
+    X, y = load_data()
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+    )
+
+    pipeline = create_model()
+
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+    with mlflow.start_run(run_name="RandomForest"):
+
+        pipeline.fit(X_train, y_train)
+
+        metrics = evaluate_model(
+            pipeline,
+            X_test,
+            y_test,
         )
-    ],
-    remainder="passthrough"
-)
+
+        mlflow.log_param(
+            "model",
+            "RandomForest",
+        )
+
+        mlflow.log_param(
+            "n_estimators",
+            200,
+        )
+
+        mlflow.log_param(
+            "random_state",
+            42,
+        )
+
+        mlflow.log_metric(
+            "mae",
+            metrics["mae"],
+        )
+
+        mlflow.log_metric(
+            "r2",
+            metrics["r2"],
+        )
+
+        joblib.dump(
+            pipeline,
+            MODEL_PATH,
+        )
+
+        model_info = mlflow.sklearn.log_model(
+            pipeline,
+            name="model",
+            skops_trusted_types=[
+                "sklearn.tree._tree.Tree"
+            ],
+        )
+
+        registered_model = mlflow.register_model(
+            model_uri=model_info.model_uri,
+            name=MODEL_NAME,
+        )
+
+        print("\nModel Evaluation")
+        print("----------------")
+        print("Model: Random Forest")
+        print("n_estimators: 200")
+        print(f"MAE: ₹{metrics['mae']:,.2f}")
+        print(f"R²: {metrics['r2']:.4f}")
+
+        print("\nMLflow")
+        print("------")
+        print(f"Model: {registered_model.name}")
+        print(f"Version: {registered_model.version}")
+
+        print(f"\nModel saved to {MODEL_PATH}")
 
 
-# --------------------------------------------------
-# 5. Transform training and test data
-# --------------------------------------------------
-
-X_train_processed = preprocessor.fit_transform(X_train)
-X_test_processed = preprocessor.transform(X_test)
-
-
-# --------------------------------------------------
-# 6. Train model
-# --------------------------------------------------
-
-model = LinearRegression()
-
-model.fit(X_train_processed, y_train)
-
-
-# --------------------------------------------------
-# 7. Evaluate model
-# --------------------------------------------------
-
-predictions = model.predict(X_test_processed)
-
-mae = mean_absolute_error(y_test, predictions)
-r2 = r2_score(y_test, predictions)
-
-print("\nModel evaluation")
-print("----------------")
-print(f"MAE: ₹{mae:,.2f}")
-print(f"R²:  {r2:.4f}")
-
-
-# --------------------------------------------------
-# 8. Save model + preprocessing
-# --------------------------------------------------
-
-model_artifact = {
-    "model": model,
-    "preprocessor": preprocessor
-}
-
-joblib.dump(
-    model_artifact,
-    "models/model.pkl"
-)
-
-print("\nModel saved to models/model.pkl")
+if __name__ == "__main__":
+    train()
