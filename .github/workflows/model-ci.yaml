@@ -48,3 +48,12 @@ jobs:
       - name: Train and evaluate model
         run: |
           python -m src.model_ci
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: house-price-model-${{ github.sha }}
+          path: |
+            models/model_ci.pkl
+            models/metrics.json
+          retention-days: 7

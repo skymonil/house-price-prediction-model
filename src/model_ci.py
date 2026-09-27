@@ -6,11 +6,15 @@ from sklearn.pipeline import Pipeline
 from src.preprocess import create_preprocessor
 from src.evaluate import evaluate_model
 
-
+from pathlib import Path
+import json
+import joblib
 # Quality thresholds
 MIN_R2 = 0.90
 MAX_MAE = 1_000_000
 
+MODEL_PATH = Path("models/model_ci.pkl")
+METRICS_PATH = Path("models/metrics.json")
 
 def train_model():
     # Load dataset
@@ -76,7 +80,25 @@ def validate_model(metrics):
 
     print("\nModel quality check PASSED.")
 
+def save_artifacts(model, metrics):
+    # Create model directory
+    MODEL_PATH.parent.mkdir(parents=True, exist_okk=True)
+    
+    # Save trained model
+    joblib.dump(model, MODEL_PATH)
+
+    # Save evaluation metrics
+    with open(METRICS_PATH, "w") as file:
+        json.dump(metrics, file, indent=4)
+
+    print("\nModel artifacts saved:")
+    print(f" Model: {MODEL_PATH}")
+    print(f" Metrics: {METRICS_PATH}")
+
 
 if __name__ == "__main__":
-    _, metrics = train_model()
+    model, metrics = train_model()
     validate_model(metrics)
+
+    # We will save the model only if the quality gates pass
+    save_artifacts(model, metrics)
