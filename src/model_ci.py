@@ -97,6 +97,43 @@ def save_artifacts(model, metrics):
 
 def log_to_mlflow(model, metrics):
     mlflow.set_tracking_uri(
+        os.environ["MLFLOW_TRACKING_URI"]
+    )
+
+    mlflow.set_experiment(MLFLOW_EXPERIMENT)
+
+    with mlflow.start_run() as run:
+        mlflow.log_params(
+            {
+                "n_estimators": 200,
+                "random_state": 42,
+                "test_size": 0.2,
+            }
+        )
+
+        mlflow.log_metrics(
+            {
+                "mae": metrics["mae"],
+                "r2": metrics["r2"],
+            }
+        )
+
+        mlflow.sklearn.log_model(
+            model,
+            name="house-price-model",
+            skops_trusted_types=[
+                "sklearn.tree._tree.Tree"
+            ],
+        )
+
+        run_id = run.info.run_id
+
+        print("\nMLflow run logged successfully.")
+        print(f"Run ID: {run_id}")
+
+        return run_id
+    
+    mlflow.set_tracking_uri(
     os.environ.get("MLFLOW_TRACKING_URI", "https://mlflow.615915.xyz")
 )
 
@@ -128,14 +165,33 @@ def log_to_mlflow(model, metrics):
 
         print("\nMLflow run logged successfully.")
 
+def register_model(run_id):
+    model_name = "HousePricePredictor"
+
+    model_uri = f"runs:/{run_id}/house-price-model"
+
+    registered_model = mlflow.register_model(
+        model_uri=model_uri,
+        name=model_name,
+    )
+
+    print("\nModel registered successfully.")
+    print(f"Model name: {registered_model.name}")
+    print(f"Model version: {registered_model.version}")
+
+    return registered_model
 
 if __name__ == "__main__":
     model, metrics = train_model()
 
-    # Model must pass quality gate first
+    # 1. Quality gate
     validate_model(metrics)
 
-    # Only save/log a model that passed
+    # 2. Save local CI artifacts
     save_artifacts(model, metrics)
 
-    log_to_mlflow(model, metrics)
+    # 3. Log successful model to MLflow
+    run_id = log_to_mlflow(model, metrics)
+
+    # 4. Register only after quality gate passes
+    register_model(run_id)
