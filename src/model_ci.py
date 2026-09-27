@@ -82,7 +82,7 @@ def validate_model(metrics):
 
 def save_artifacts(model, metrics):
     # Create model directory
-    MODEL_PATH.parent.mkdir(parents=True, exist_okk=True)
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     
     # Save trained model
     joblib.dump(model, MODEL_PATH)
