@@ -152,6 +152,41 @@ def save_artifacts(model, metrics):
 # ============================================================
 
 def log_to_mlflow(model, metrics):
+    tracking_uri = os.environ.get(
+        "MLFLOW_TRACKING_URI", "https://mlflow.615915.xyz"
+    )
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT)
+
+    with mlflow.start_run() as run:
+        mlflow.log_params(
+            {
+                "n_estimators": 200,
+                "random_state": 42,
+                "test_size": 0.2,
+            }
+        )
+
+        mlflow.log_metrics(
+            {
+                "mae": metrics["mae"],
+                "r2": metrics["r2"],
+            }
+        )
+
+        # Log scikit-learn model with skops trusted types explicitly set
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            name="house-price-model",
+            skops_trusted_types=["sklearn.tree._tree.Tree"],
+        )
+
+        run_id = run.info.run_id
+
+        print("\nMLflow run logged successfully.")
+        print(f"Run ID: {run_id}")
+
+        return run_id
     mlflow.set_tracking_uri(
         MLFLOW_TRACKING_URI
     )
