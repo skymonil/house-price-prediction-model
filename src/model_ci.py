@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import joblib
@@ -9,18 +10,42 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from src.preprocess import create_preprocessor
 from src.evaluate import evaluate_model
-import os
+from src.preprocess import create_preprocessor
+
+
+# ============================================================
+# Model Quality Thresholds
+# ============================================================
 
 MIN_R2 = 0.90
 MAX_MAE = 1_000_000
 
+
+# ============================================================
+# Local CI Artifacts
+# ============================================================
+
 MODEL_PATH = Path("models/model_ci.pkl")
 METRICS_PATH = Path("models/metrics.json")
 
-MLFLOW_EXPERIMENT = "house-price-prediction-v2"
 
+# ============================================================
+# MLflow Configuration
+# ============================================================
+
+MLFLOW_EXPERIMENT = "house-price-prediction-v2"
+MODEL_NAME = "HousePricePredictor"
+
+MLFLOW_TRACKING_URI = os.environ.get(
+    "MLFLOW_TRACKING_URI",
+    "https://mlflow.615915.xyz",
+)
+
+
+# ============================================================
+# Train Model
+# ============================================================
 
 def train_model():
     data = pd.read_csv("data/houses.csv")
@@ -50,10 +75,18 @@ def train_model():
 
     model.fit(X_train, y_train)
 
-    metrics = evaluate_model(model, X_test, y_test)
+    metrics = evaluate_model(
+        model,
+        X_test,
+        y_test,
+    )
 
     return model, metrics
 
+
+# ============================================================
+# Model Quality Gate
+# ============================================================
 
 def validate_model(metrics):
     print("\nModel Evaluation")
@@ -68,13 +101,14 @@ def validate_model(metrics):
 
     if metrics["r2"] < MIN_R2:
         raise RuntimeError(
-            f"Model quality check failed: "
-            f"R²={metrics['r2']:.4f}, required >= {MIN_R2}"
+            "Model quality check failed: "
+            f"R²={metrics['r2']:.4f}, "
+            f"required >= {MIN_R2}"
         )
 
     if metrics["mae"] > MAX_MAE:
         raise RuntimeError(
-            f"Model quality check failed: "
+            "Model quality check failed: "
             f"MAE=₹{metrics['mae']:,.2f}, "
             f"required <= ₹{MAX_MAE:,.0f}"
         )
@@ -82,29 +116,55 @@ def validate_model(metrics):
     print("\nModel quality check PASSED.")
 
 
+# ============================================================
+# Save Local CI Artifacts
+# ============================================================
+
 def save_artifacts(model, metrics):
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MODEL_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    joblib.dump(model, MODEL_PATH)
+    joblib.dump(
+        model,
+        MODEL_PATH,
+    )
 
-    with open(METRICS_PATH, "w") as file:
-        json.dump(metrics, file, indent=4)
+    with open(
+        METRICS_PATH,
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            metrics,
+            file,
+            indent=4,
+        )
 
     print("\nModel artifacts saved:")
     print(f"  Model:   {MODEL_PATH}")
     print(f"  Metrics: {METRICS_PATH}")
 
 
+# ============================================================
+# Log Model to MLflow
+# ============================================================
+
 def log_to_mlflow(model, metrics):
     mlflow.set_tracking_uri(
-        os.environ["MLFLOW_TRACKING_URI"]
+        MLFLOW_TRACKING_URI
     )
 
-    mlflow.set_experiment(MLFLOW_EXPERIMENT)
+    mlflow.set_experiment(
+        MLFLOW_EXPERIMENT
+    )
 
     with mlflow.start_run() as run:
+
         mlflow.log_params(
             {
+                "model_type": "RandomForestRegressor",
                 "n_estimators": 200,
                 "random_state": 42,
                 "test_size": 0.2,
@@ -118,12 +178,10 @@ def log_to_mlflow(model, metrics):
             }
         )
 
+        # Store the sklearn model under this artifact path.
         mlflow.sklearn.log_model(
-            model,
-            name="house-price-model",
-            skops_trusted_types=[
-                "sklearn.tree._tree.Tree"
-            ],
+            sk_model=model,
+            artifact_path="house-price-model",
         )
 
         run_id = run.info.run_id
@@ -132,66 +190,77 @@ def log_to_mlflow(model, metrics):
         print(f"Run ID: {run_id}")
 
         return run_id
-    
-    mlflow.set_tracking_uri(
-    os.environ.get("MLFLOW_TRACKING_URI", "https://mlflow.615915.xyz")
-)
 
-    mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
-    with mlflow.start_run():
-        mlflow.log_params(
-            {
-                "n_estimators": 200,
-                "random_state": 42,
-                "test_size": 0.2,
-            }
-        )
-
-        mlflow.log_metrics(
-            {
-                "mae": metrics["mae"],
-                "r2": metrics["r2"],
-            }
-        )
-
-        mlflow.sklearn.log_model(
-            model,
-            name="house-price-model",
-            skops_trusted_types=[
-           "sklearn.tree._tree.Tree"
-         ]   ,
-        )
-
-        print("\nMLflow run logged successfully.")
+# ============================================================
+# Register Model
+# ============================================================
 
 def register_model(run_id):
-    model_name = "HousePricePredictor"
-
-    model_uri = f"runs:/{run_id}/house-price-model"
+    model_uri = (
+        f"runs:/{run_id}/house-price-model"
+    )
 
     registered_model = mlflow.register_model(
         model_uri=model_uri,
-        name=model_name,
+        name=MODEL_NAME,
     )
 
     print("\nModel registered successfully.")
-    print(f"Model name: {registered_model.name}")
+    print(f"Model name:    {registered_model.name}")
     print(f"Model version: {registered_model.version}")
 
     return registered_model
 
+
+# ============================================================
+# Main
+# ============================================================
+
 if __name__ == "__main__":
+
+    # --------------------------------------------------------
+    # 1. Train
+    # --------------------------------------------------------
+
     model, metrics = train_model()
 
-    # 1. Quality gate
+    # --------------------------------------------------------
+    # 2. Quality Gate
+    # --------------------------------------------------------
+
     validate_model(metrics)
 
-    # 2. Save local CI artifacts
-    save_artifacts(model, metrics)
+    # --------------------------------------------------------
+    # 3. Save CI Artifacts
+    # --------------------------------------------------------
 
-    # 3. Log successful model to MLflow
-    run_id = log_to_mlflow(model, metrics)
+    save_artifacts(
+        model,
+        metrics,
+    )
 
-    # 4. Register only after quality gate passes
-    register_model(run_id)
+    # --------------------------------------------------------
+    # 4. Configure MLflow
+    # --------------------------------------------------------
+
+    mlflow.set_tracking_uri(
+        MLFLOW_TRACKING_URI
+    )
+
+    # --------------------------------------------------------
+    # 5. Log Model
+    # --------------------------------------------------------
+
+    run_id = log_to_mlflow(
+        model,
+        metrics,
+    )
+
+    # --------------------------------------------------------
+    # 6. Register Model
+    # --------------------------------------------------------
+
+    register_model(
+        run_id
+
