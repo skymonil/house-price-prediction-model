@@ -27,7 +27,7 @@ MLFLOW_TRACKING_URI = os.getenv(
 
 MLFLOW_MODEL_URI = os.getenv(
     "MLFLOW_MODEL_URI",
-    "models:/HousePricePredictor/1",
+    "models:/HousePricePredictor@champion"
 )
 
 
@@ -41,7 +41,20 @@ def load_model():
     return mlflow.sklearn.load_model(
         MLFLOW_MODEL_URI
     )
+def load_model():
+    tracking_uri = os.getenv(
+        "MLFLOW_TRACKING_URI",
+        "https://mlflow.615915.xyz"
+    )
 
+    model_uri = os.getenv(
+        "MLFLOW_MODEL_URI",
+        "models:/HousePricePredictor@champion"
+    )
+
+    mlflow.set_tracking_uri(tracking_uri)
+
+    return mlflow.sklearn.load_model(model_uri)
 
 # --------------------------------------------------
 # FastAPI lifespan
