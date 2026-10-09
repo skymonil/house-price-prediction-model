@@ -71,7 +71,7 @@ jobs:
     name: Update Dev GitOps Image
     runs-on: ubuntu-latest
     needs: docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: github.event_name == 'push'
 
     steps:
       - name: Checkout GitOps repository
