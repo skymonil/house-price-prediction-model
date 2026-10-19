@@ -95,7 +95,7 @@ jobs:
           from pathlib import Path
 
           path = Path(
-              "environments/dev/values/house-price-api.yaml"
+              "gitops/environments/dev/values/house-price-api.yaml"
           )
 
           if not path.is_file():
