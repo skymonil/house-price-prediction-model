@@ -74,6 +74,16 @@ jobs:
             exit 1
           }
 
+      # Candidate registration must happen only after quality gates pass.
+  # src.model_ci must write this file after successful registratio
+      
+      - name: Verify candidate version
+        if: github.event_name != 'pull_request'
+        run: |
+          test -s models/candidate_version.txt || {
+            echo "Candidate registration did not produce models/candidate_version.txt"
+            exit 1
+          }
       - name: Upload model artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -82,5 +92,6 @@ jobs:
           path: |
             models/model_ci.pkl
             models/metrics.json
+            models/candidate_version.txt
           if-no-files-found: warn
           retention-days: 7

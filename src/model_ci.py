@@ -295,6 +295,19 @@ def register_model(run_id):
         name=MODEL_NAME,
     )
 
+    candidate_version = str(registered_model.version)
+    # Save the registered version for the comparison CI job.
+    candidate_version_path = Path("models/candidate_version.txt")
+    candidate_version_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    candidate_version_path.write_text(
+        f"{candidate_version}\n",
+        encoding="utf-8",
+    )
+
     print(
         "\nModel registered successfully.",
         flush=True,
@@ -307,6 +320,8 @@ def register_model(run_id):
         f"Model version: {registered_model.version}",
         flush=True,
     )
+
+    print(f"Candidate file:  {candidate_version_path}", flush=True)
 
     return registered_model
 
