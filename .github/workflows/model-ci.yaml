@@ -5,33 +5,43 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - "src/train.py"
       - "src/preprocess.py"
       - "src/evaluate.py"
       - "src/model_ci.py"
       - "data/houses.csv"
+      - "requirements.txt"
+      - ".github/workflows/model_ci.yaml"
 
   pull_request:
     branches:
       - main
-      - develop
     paths:
       - "src/train.py"
       - "src/preprocess.py"
       - "src/evaluate.py"
       - "src/model_ci.py"
       - "data/houses.csv"
+      - "requirements.txt"
+      - ".github/workflows/model_ci.yaml"
 
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   model-quality:
     name: Train and Validate Model
     runs-on: ubuntu-latest
+
     env:
-      MLFLOW_TRACKING_URI: "https://mlflow.615915.xyz"
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
 
     steps:
       - name: Checkout repository
@@ -41,6 +51,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -51,11 +62,25 @@ jobs:
         run: |
           python -m src.model_ci
 
-      - name: Upload model artifact
+      - name: Verify model artifacts
+        run: |
+          test -f models/model_ci.pkl || {
+            echo "Missing models/model_ci.pkl"
+            exit 1
+          }
+
+          test -f models/metrics.json || {
+            echo "Missing models/metrics.json"
+            exit 1
+          }
+
+      - name: Upload model artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: house-price-model-${{ github.sha }}
           path: |
             models/model_ci.pkl
             models/metrics.json
+          if-no-files-found: warn
           retention-days: 7

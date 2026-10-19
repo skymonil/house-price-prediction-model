@@ -5,15 +5,16 @@ on:
   push:
     branches:
       - main
-      - develop
 
   pull_request:
     branches:
       - main
-      - develop
 
 permissions:
   contents: read
+
+env:
+  IMAGE_NAME: skymonil/house-price-api
 
 jobs:
   # 1. Run application tests
@@ -39,7 +40,7 @@ jobs:
       - name: Run tests
         run: pytest
 
-  # 2. Build and publish Docker image
+  # 2. Build the image and publish it on branch pushes
   docker:
     name: Build and Publish Docker Image
     runs-on: ubuntu-latest
@@ -64,25 +65,27 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
-          tags: skymonil/house-price-api:${{ github.sha }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-  # 3. Update dev GitOps workload after a develop push
-  update-gitops:
+  # 3. Update dev only after a successful push to develop
+  update-dev-gitops:
     name: Update Dev GitOps Image
     runs-on: ubuntu-latest
     needs: docker
-    if: github.event_name == 'push'
+
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
-          repository: skymonil/event-microservice-gitops
+          repository: skymonil/house-price-prediction-model-gitops
           ref: main
           token: ${{ secrets.GITOPS_TOKEN }}
           path: gitops
 
-      - name: Update House Price API image tag
+      - name: Update dev image tag
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -91,38 +94,70 @@ jobs:
           import re
           from pathlib import Path
 
-          path = Path("gitops/workloads/dev/house-price-api/values.yaml")
-
-          if not path.exists():
-              raise SystemExit(f"GitOps values file not found: {path}")
-
-          content = path.read_text()
-
-          # Update the image tag under microservice.image only.
-          pattern = r'(?ms)(^microservice:\s*\n.*?^\s{2}image:\s*\n.*?^\s{4}tag:\s*)("[^"]*"|[^\s#]+)(\s*(?:#.*)?)$'
-
-          updated, count = re.subn(
-              pattern,
-              lambda m: f'{m.group(1)}"{os.environ["IMAGE_TAG"]}"{m.group(3)}',
-              content,
-              count=1,
+          path = Path(
+              "environments/dev/values/house-price-api.yaml"
           )
 
-          if count != 1:
+          if not path.is_file():
+              raise SystemExit(f"GitOps values file not found: {path}")
+
+          lines = path.read_text().splitlines(keepends=True)
+
+          inside_image = False
+          updated = False
+          result = []
+
+          image_tag = os.environ["IMAGE_TAG"]
+
+          for line in lines:
+              # Find the top-level image block.
+              if line.startswith("image:"):
+                  inside_image = True
+                  result.append(line)
+                  continue
+
+              # Stop when the next top-level YAML key begins.
+              if (
+                  inside_image
+                  and line.strip()
+                  and not line[0].isspace()
+                  and not line.lstrip().startswith("#")
+              ):
+                  inside_image = False
+
+              # Update only image.tag, preserving comments and formatting.
+              if inside_image and re.match(r"^  tag:\s*", line):
+                  line, count = re.subn(
+                      r'^(\s*tag:\s*)(?:"[^"]*"|\'[^\']*\'|[^\s#]+)',
+                      lambda m: f'{m.group(1)}"{image_tag}"',
+                      line,
+                      count=1,
+                  )
+
+                  if count != 1:
+                      raise SystemExit("Could not update image.tag")
+
+                  updated = True
+
+              result.append(line)
+
+          if not updated:
               raise SystemExit(
-                  "Could not find microservice.image.tag in values.yaml"
+                  f"Could not find image.tag in {path}"
               )
 
-          path.write_text(updated)
+          path.write_text("".join(result))
+          print(f"Updated dev image tag to {image_tag}")
           PY
 
       - name: Commit and push GitOps change
         working-directory: gitops
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add workloads/dev/house-price-api/values.yaml
+          git add environments/dev/values/house-price-api.yaml
 
           if git diff --cached --quiet; then
             echo "No GitOps changes to commit."
