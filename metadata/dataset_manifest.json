@@ -1,0 +1,64 @@
+{
+  "dataset_version": "v1",
+  "created_at_utc": "2026-10-25T08:16:51.420777+00:00",
+  "source_dataset": {
+    "path": "data/raw/houses.csv",
+    "sha256": "10cb354f98200ba2ad1f030eb9993af8a1f444ebe003fccdb03d195eab262aed",
+    "row_count": 100,
+    "columns": [
+      "Bedrooms",
+      "Area",
+      "Location",
+      "Age",
+      "Price"
+    ]
+  },
+  "split_configuration": {
+    "method": "random_train_test_split",
+    "random_state": 42,
+    "shuffle": true,
+    "ratios": {
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    }
+  },
+  "splits": {
+    "train": {
+      "path": "data/processed/train.csv",
+      "sha256": "4582403b6e100a595812c2d402c88ce9fa414e59b3e6f7e11df92c66dd7b3409",
+      "row_count": 70,
+      "columns": [
+        "Bedrooms",
+        "Area",
+        "Location",
+        "Age",
+        "Price"
+      ]
+    },
+    "validation": {
+      "path": "data/processed/validation.csv",
+      "sha256": "13bbebce5f5f4db3870645d7e663c242e575d7b3bd4ff178241954124c3e79ac",
+      "row_count": 15,
+      "columns": [
+        "Bedrooms",
+        "Area",
+        "Location",
+        "Age",
+        "Price"
+      ]
+    },
+    "test": {
+      "path": "data/processed/test.csv",
+      "sha256": "440b06d0c24f7a902bc2e0dd15b9e9535bdffe294061323d394da4e6590b4992",
+      "row_count": 15,
+      "columns": [
+        "Bedrooms",
+        "Area",
+        "Location",
+        "Age",
+        "Price"
+      ]
+    }
+  }
+}
