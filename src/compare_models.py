@@ -8,9 +8,9 @@ import mlflow
 import mlflow.sklearn
 import pandas as pd
 from mlflow import MlflowClient
-from sklearn.metrics import mean_absolute_error, r2_score
 
 from src.dataset_utils import load_verified_split
+from src.model_validation import validate_dataset_frame, evaluate_predictions
 
 MODEL_NAME = "HousePricePredictor"
 CHAMPION_ALIAS = "champion"
@@ -24,25 +24,14 @@ REPORT_DIR = Path("reports")
 
 
 def split_features_target(data: pd.DataFrame, split_name: str):
-    required_columns = ["Bedrooms", "Area", "Location", "Age", "Price"]
-    missing = set(required_columns) - set(data.columns)
-    if missing:
-        raise ValueError(
-            f"{split_name} dataset is missing columns: {sorted(missing)}"
-        )
-    if data[required_columns].isna().any().any():
-        raise ValueError(f"{split_name} dataset contains null required values.")
-    X = data[["Bedrooms", "Area", "Location", "Age"]]
+    validate_dataset_frame(data, split_name)
+    X = data[["Bedrooms", "Area", "Location", "Age"]].copy()
     y = pd.to_numeric(data["Price"], errors="raise")
     return X, y
 
 
 def evaluate_model(model, X_eval, y_eval):
-    predictions = model.predict(X_eval)
-    return {
-        "mae": float(mean_absolute_error(y_eval, predictions)),
-        "r2": float(r2_score(y_eval, predictions)),
-    }
+    return evaluate_predictions(model, X_eval, y_eval)
 
 
 def main():
@@ -56,7 +45,7 @@ def main():
     )
     args = parser.parse_args()
 
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "https://mlflow.615915.xyz")
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
 

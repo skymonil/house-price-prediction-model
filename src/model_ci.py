@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from src.dataset_utils import load_verified_split
 from src.evaluate import evaluate_model
 from src.preprocess import create_preprocessor
+from src.model_validation import validate_dataset_frame, validate_quality_metrics
 
 MIN_R2 = 0.90
 MAX_MAE = 1_000_000
@@ -29,16 +30,8 @@ MLFLOW_TRACKING_URI = os.environ.get(
 
 
 def split_features_target(data: pd.DataFrame, split_name: str):
-    required_columns = ["Bedrooms", "Area", "Location", "Age", "Price"]
-    missing = set(required_columns) - set(data.columns)
-    if missing:
-        raise ValueError(
-            f"{split_name} dataset is missing columns: {sorted(missing)}"
-        )
-    if data[required_columns].isna().any().any():
-        raise ValueError(f"{split_name} dataset contains null required values.")
-
-    X = data[["Bedrooms", "Area", "Location", "Age"]]
+    validate_dataset_frame(data, split_name)
+    X = data[["Bedrooms", "Area", "Location", "Age"]].copy()
     y = pd.to_numeric(data["Price"], errors="raise")
     return X, y
 
@@ -102,17 +95,7 @@ def validate_model(metrics):
     print("------------", flush=True)
     print(f"Required R²  >= {MIN_R2}", flush=True)
     print(f"Required MAE <= ₹{MAX_MAE:,.0f}", flush=True)
-
-    if metrics["r2"] < MIN_R2:
-        raise RuntimeError(
-            f"Model quality check failed: R²={metrics['r2']:.4f}, "
-            f"required >= {MIN_R2}"
-        )
-    if metrics["mae"] > MAX_MAE:
-        raise RuntimeError(
-            f"Model quality check failed: MAE=₹{metrics['mae']:,.2f}, "
-            f"required <= ₹{MAX_MAE:,.0f}"
-        )
+    validate_quality_metrics(metrics, min_r2=MIN_R2, max_mae=MAX_MAE)
     print("\nModel quality check PASSED.", flush=True)
 
 
