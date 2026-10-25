@@ -3,19 +3,12 @@ from contextlib import asynccontextmanager
 
 import mlflow
 import mlflow.sklearn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from src.predict import predict_price
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    if not getattr(app.state, "testing", False):
-        app.state.model = load_model()
 
-    yield
-
-    app.state.model = None
 # --------------------------------------------------
 # Configuration
 # --------------------------------------------------
@@ -27,7 +20,7 @@ MLFLOW_TRACKING_URI = os.getenv(
 
 MLFLOW_MODEL_URI = os.getenv(
     "MLFLOW_MODEL_URI",
-    "models:/HousePricePredictor@champion"
+    "models:/HousePricePredictor@champion",
 )
 
 
@@ -38,27 +31,23 @@ MLFLOW_MODEL_URI = os.getenv(
 def load_model():
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-    return mlflow.sklearn.load_model(
-        MLFLOW_MODEL_URI
-    )
-def load_model():
-    tracking_uri = os.getenv(
-        "MLFLOW_TRACKING_URI",
-        "https://mlflow.615915.xyz"
-    )
+    return mlflow.sklearn.load_model(MLFLOW_MODEL_URI)
 
-    model_uri = os.getenv(
-        "MLFLOW_MODEL_URI",
-        "models:/HousePricePredictor@champion"
-    )
-
-    mlflow.set_tracking_uri(tracking_uri)
-
-    return mlflow.sklearn.load_model(model_uri)
 
 # --------------------------------------------------
 # FastAPI lifespan
 # --------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.model = None
+
+    if not getattr(app.state, "testing", False):
+        app.state.model = load_model()
+
+    yield
+
+    app.state.model = None
 
 
 app = FastAPI(
@@ -87,7 +76,13 @@ def predict(
     house: HouseInput,
     request: Request,
 ):
-    model = request.app.state.model
+    model = getattr(request.app.state, "model", None)
+
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is not loaded",
+        )
 
     predicted_price = predict_price(
         model=model,
@@ -98,7 +93,7 @@ def predict(
     )
 
     return {
-        "predicted_price": predicted_price
+        "predicted_price": predicted_price,
     }
 
 
@@ -109,5 +104,24 @@ def predict(
 @app.get("/health")
 def health():
     return {
-        "status": "ok"
+        "status": "ok",
+    }
+
+
+# --------------------------------------------------
+# Readiness endpoint
+# --------------------------------------------------
+
+@app.get("/ready")
+def ready(request: Request):
+    model = getattr(request.app.state, "model", None)
+
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is not loaded",
+        )
+
+    return {
+        "status": "ready",
     }
