@@ -5,7 +5,7 @@ import mlflow
 import mlflow.sklearn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-
+from prometheus_fastapi_instrumentator import Instrumentator
 from src.predict import predict_price
 
 
@@ -55,6 +55,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 # --------------------------------------------------
 # Request schema
